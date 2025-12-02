@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu - Sistem Informasi RT</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>SI Pelayanan RT</h1>
+            </div>
+            <div class="nav-menu">
+                <a href="/home" class="nav-link">Beranda</a>
+                <a href="/dashboard" class="nav-link active">Menu</a>
+                <a href="/profil" class="nav-link">Profil</a>
+                <a href="/admin" class="nav-link" id="adminLink" style="display: none;">Admin</a>
+                <button id="logoutBtn" class="btn btn-secondary btn-small">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="dashboard-container">
+        <div class="container">
+            <div class="dashboard-header">
+                <h2>Menu</h2>
+                <p>Pilih menu yang Anda butuhkan</p>
+            </div>
+
+            <div class="sidebar" style="max-width: 400px; margin: 0 auto;">
+                <div class="sidebar-card">
+                    <h4>Menu</h4>
+                    <div class="menu-links">
+                        <a href="/pengajuan-surat" class="menu-link">
+                            <span class="menu-icon">📝</span>
+                            <span>Pengajuan Surat</span>
+                        </a>
+                        <a href="/pembayaran-iuran" class="menu-link">
+                            <span class="menu-icon">💰</span>
+                            <span>Pembayaran Iuran Kas RT</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>Riwayat</h3>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="applications">Pengajuan Surat</button>
+                    <button class="tab-btn" data-tab="payments">Pembayaran</button>
+                </div>
+                
+                <div id="applicationsTab" class="tab-content active">
+                    <div id="applicationsList" class="history-list">
+                        <div class="loading">Memuat data...</div>
+                    </div>
+                </div>
+                
+                <div id="paymentsTab" class="tab-content">
+                    <div id="paymentsList" class="history-list">
+                        <div class="loading">Memuat data...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        let currentUser = null;
+
+        // Check authentication
+        async function init() {
+            try {
+                const response = await fetch('/api/user');
+                const data = await response.json();
+                if (data.user) {
+                    currentUser = data.user;
+                    if (data.user.role === 'admin') {
+                        document.getElementById('adminLink').style.display = 'inline-block';
+                    }
+                    loadApplications();
+                    loadPayments();
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                window.location.href = '/login';
+            }
+        }
+
+        // Load applications
+        async function loadApplications() {
+            try {
+                const response = await fetch('/api/letter-applications/my');
+                const data = await response.json();
+                const list = document.getElementById('applicationsList');
+                
+                if (data.applications && data.applications.length > 0) {
+                    list.innerHTML = data.applications.map(app => {
+                        const summary = window.formatLetterDetailSummary ? formatLetterDetailSummary(app.letter_type, app.details) : '';
+                        return `
+                        <div class="history-item">
+                            <div class="history-header">
+                                <span class="history-title">${window.getLetterTypeName ? getLetterTypeName(app.letter_type) : app.letter_type}</span>
+                                <span class="status-badge status-${app.status}">${getStatusName(app.status)}</span>
+                            </div>
+                            <div class="history-info">
+                                <span>ID: ${app.application_id}</span>
+                                <span>${formatDate(app.created_at)}</span>
+                            </div>
+                            ${summary ? `<div class="history-summary">${summary}</div>` : ''}
+                            ${app.status === 'approved' && app.pdf_path ? 
+                                `<a href="/api/letter-applications/${app.id}/download" class="btn btn-small btn-primary">Download Surat</a>` : ''}
+                        </div>
+                        `;
+                    }).join('');
+                } else {
+                    list.innerHTML = '<div class="empty-message">Belum ada pengajuan surat</div>';
+                }
+            } catch (error) {
+                document.getElementById('applicationsList').innerHTML = '<div class="error-message">Gagal memuat data</div>';
+            }
+        }
+
+        // Load payments
+        async function loadPayments() {
+            try {
+                const response = await fetch('/api/payments/my');
+                const data = await response.json();
+                const list = document.getElementById('paymentsList');
+                
+                if (data.payments && data.payments.length > 0) {
+                    list.innerHTML = data.payments.map(payment => `
+                        <div class="history-item">
+                            <div class="history-header">
+                                <span class="history-title">Pembayaran Iuran - ${payment.period}</span>
+                                <span class="status-badge status-${payment.status}">${getStatusName(payment.status)}</span>
+                            </div>
+                            <div class="history-info">
+                                <span>Rp ${formatCurrency(payment.amount)}</span>
+                                <span>${payment.payment_method}</span>
+                                <span>${formatDate(payment.created_at)}</span>
+                            </div>
+                            ${payment.invoice_path ? 
+                                `<a href="/api/payments/${payment.id}/invoice" class="btn btn-small btn-primary">Download Invoice</a>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<div class="empty-message">Belum ada pembayaran</div>';
+                }
+            } catch (error) {
+                document.getElementById('paymentsList').innerHTML = '<div class="error-message">Gagal memuat data</div>';
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+            });
+        });
+
+
+        function getStatusName(status) {
+            const statuses = {
+                'pending': 'Menunggu',
+                'approved': 'Disetujui',
+                'rejected': 'Ditolak'
+            };
+            return statuses[status] || status;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('id-ID').format(amount);
+        }
+
+        // Logout handler
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
+

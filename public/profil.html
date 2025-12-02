@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil - Sistem Informasi RT</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>SI Pelayanan RT</h1>
+            </div>
+            <div class="nav-menu">
+                <a href="/home" class="nav-link">Beranda</a>
+                <a href="/profil" class="nav-link active">Profil</a>
+                <button id="logoutBtn" class="btn btn-secondary btn-small">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="profil-container">
+        <div class="container">
+            <h2>Profil Saya</h2>
+
+            <div class="profil-card">
+                <div class="profil-header">
+                    <div class="profil-avatar">
+                        <span>👤</span>
+                    </div>
+                    <h3>Informasi Akun</h3>
+                </div>
+
+                <div class="profil-info">
+                    <div class="info-row">
+                        <span class="info-label">Nama Lengkap:</span>
+                        <span id="profilName" class="info-value"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Nomor Induk Kependudukan (NIK):</span>
+                        <span id="profilNIK" class="info-value"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Email:</span>
+                        <span id="profilEmail" class="info-value"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Nomor Telepon:</span>
+                        <span id="profilPhone" class="info-value"></span>
+                    </div>
+                </div>
+
+                <div class="profil-actions">
+                    <a href="/home" class="btn btn-secondary">Kembali ke Beranda</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        (async () => {
+            const fields = {
+                name: document.getElementById('profilName'),
+                nik: document.getElementById('profilNIK'),
+                email: document.getElementById('profilEmail'),
+                phone: document.getElementById('profilPhone')
+            };
+
+            const setValue = (el, value) => {
+                if (!el) return;
+                const formatted = typeof value === 'string' ? value.trim() : value;
+                el.textContent = formatted || '-';
+            };
+
+            try {
+                const user = await checkAuth();
+                if (!user) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                setValue(fields.name, user.full_name || user.name);
+                setValue(fields.nik, user.nik);
+                setValue(fields.email, user.email);
+                setValue(fields.phone, user.phone);
+            } catch (error) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', logout);
+            }
+        })();
+    </script>
+</body>
+</html>
+

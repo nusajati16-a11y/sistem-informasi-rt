@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beranda - Sistem Informasi RT</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>SI Pelayanan RT</h1>
+            </div>
+            <div class="nav-menu">
+                <a href="/home" class="nav-link active">Beranda</a>
+                <a href="/profil" class="nav-link">Profil</a>
+                <div class="notification-icon" id="notificationIcon">
+                    🔔
+                    <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+                </div>
+                <button id="logoutBtn" class="btn btn-secondary btn-small">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="home-container">
+        <div class="container">
+            <div class="home-header">
+                <h2>Beranda</h2>
+                <p>Selamat datang, <span id="userName"></span>!</p>
+            </div>
+
+            <div class="home-content">
+                <div class="news-section">
+                    <div class="section-header">
+                        <h3>📰 Berita & Pengumuman</h3>
+                        <div class="filter-tabs">
+                            <button class="filter-tab active" data-type="all">Semua</button>
+                            <button class="filter-tab" data-type="news">Berita</button>
+                            <button class="filter-tab" data-type="announcement">Pengumuman</button>
+                        </div>
+                    </div>
+                    <div id="newsList" class="news-list">
+                        <div class="loading">Memuat berita...</div>
+                    </div>
+                </div>
+
+                <div class="sidebar">
+                    <div class="sidebar-card">
+                        <h4>Menu</h4>
+                        <div class="menu-links">
+                            <a href="/pengajuan-surat" class="menu-link">
+                                <span class="menu-icon">📝</span>
+                                <span>Pengajuan Surat</span>
+                            </a>
+                            <a href="/pembayaran-iuran" class="menu-link">
+                                <span class="menu-icon">💰</span>
+                                <span>Pembayaran Iuran Kas RT</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-card">
+                        <h4>Notifikasi</h4>
+                        <div id="notificationsList" class="notifications-list">
+                            <p class="empty-message">Tidak ada notifikasi</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification Modal -->
+    <div id="notificationModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Notifikasi</h3>
+                <span class="close" id="closeNotificationModal">&times;</span>
+            </div>
+            <div class="modal-body" id="notificationModalBody">
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let currentUser = null;
+        let currentFilter = 'all';
+
+        // Check authentication and load user
+        async function init() {
+            try {
+                const response = await fetch('/api/user');
+                const data = await response.json();
+                if (data.user) {
+                    currentUser = data.user;
+                    document.getElementById('userName').textContent = data.user.full_name || data.user.nik;
+                    loadNews();
+                    loadNotifications();
+                    setInterval(loadNotifications, 30000); // Check every 30 seconds
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                window.location.href = '/login';
+            }
+        }
+
+        // Load news and announcements
+        async function loadNews() {
+            try {
+                const response = await fetch(`/api/news?type=${currentFilter}`);
+                const data = await response.json();
+                const newsList = document.getElementById('newsList');
+                
+                if (data.news && data.news.length > 0) {
+                    newsList.innerHTML = data.news.map(item => `
+                        <div class="news-item ${item.type}">
+                            <div class="news-header">
+                                <span class="news-type">${item.type === 'news' ? '📰 Berita' : '📢 Pengumuman'}</span>
+                                <span class="news-date">${formatDate(item.published_date)}</span>
+                            </div>
+                            <h4 class="news-title">${item.title}</h4>
+                            <p class="news-content">${item.content}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    newsList.innerHTML = '<div class="empty-message">Tidak ada berita atau pengumuman</div>';
+                }
+            } catch (error) {
+                console.error('Error loading news:', error);
+                document.getElementById('newsList').innerHTML = '<div class="error-message">Gagal memuat berita</div>';
+            }
+        }
+
+        // Load notifications
+        async function loadNotifications() {
+            try {
+                const response = await fetch('/api/notifications');
+                const data = await response.json();
+                const notificationsList = document.getElementById('notificationsList');
+                const badge = document.getElementById('notificationBadge');
+                
+                if (data.notifications && data.notifications.length > 0) {
+                    const unreadCount = data.notifications.filter(n => !n.is_read).length;
+                    if (unreadCount > 0) {
+                        badge.textContent = unreadCount;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+
+                    notificationsList.innerHTML = data.notifications.slice(0, 5).map(notif => `
+                        <div class="notification-item ${notif.is_read ? '' : 'unread'}" onclick="viewNotification(${notif.id}, '${notif.link || ''}')">
+                            <div class="notification-title">${notif.title}</div>
+                            <div class="notification-message">${notif.message}</div>
+                            <div class="notification-time">${formatTime(notif.created_at)}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    notificationsList.innerHTML = '<p class="empty-message">Tidak ada notifikasi</p>';
+                    badge.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading notifications:', error);
+            }
+        }
+
+        // View notification
+        async function viewNotification(id, link) {
+            try {
+                await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+                if (link) {
+                    window.location.href = link;
+                }
+                loadNotifications();
+            } catch (error) {
+                console.error('Error viewing notification:', error);
+            }
+        }
+
+        // Filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.dataset.type;
+                loadNews();
+            });
+        });
+
+        // Format date
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        }
+
+        // Format time
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 1) return 'Baru saja';
+            if (minutes < 60) return `${minutes} menit yang lalu`;
+            if (hours < 24) return `${hours} jam yang lalu`;
+            if (days < 7) return `${days} hari yang lalu`;
+            return formatDate(dateString);
+        }
+
+        // Logout handler
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+
+        // Notification icon click
+        document.getElementById('notificationIcon').addEventListener('click', () => {
+            window.location.href = '/home?tab=notifications';
+        });
+
+        init();
+    </script>
+</body>
+</html>
+
